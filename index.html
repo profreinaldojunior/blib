@@ -28,12 +28,12 @@ main{max-width:1150px;margin:auto;padding:25px 20px 50px}.heading{display:flex;a
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
 const games=[
-{title:"Meu Mundo Toy",description:"Crie personagens, invente estilos e monte seu próprio mundinho.",category:"Criatividade",emoji:"🧸",art:"purple",url:"https://meu-mundo-toy.vercel.app/"},
-{title:"Foguinho e Água",description:"Trabalhe em equipe para superar os obstáculos e resolver os puzzles!",category:"Raciocínio",emoji:"🔥💧",art:"orange",url:"./fogoeagua.html"},
-{title:"Jogo da Memória",description:"Encontre os pares e treine sua memória brincando.",category:"Raciocínio",emoji:"🧩",art:"blue",url:""},
-{title:"Quebra-cabeça",description:"Junte as peças e descubra a imagem escondida.",category:"Raciocínio",emoji:"🧠",art:"yellow",url:""},
-{title:"Labirinto Maluco",description:"Encontre o caminho certo e chegue até a saída.",category:"Diversão",emoji:"🌀",art:"green",url:""},
-{title:"Desafio dos Números",description:"Pequenos desafios para praticar matemática.",category:"Raciocínio",emoji:"🔢",art:"pink",url:""}
+  {title:"Meu Mundo Toy",description:"Crie personagens, invente estilos e monte seu próprio mundinho.",category:"Criatividade",emoji:"🧸",art:"purple",url:"https://meu-mundo-toy.vercel.app/"},
+  {title:"Foguinho e Água",description:"Trabalhe em equipe para superar os obstáculos e resolver os puzzles!",category:"Raciocínio",emoji:"🔥💧",art:"orange",url:"./fogoeagua.html"},
+  {title:"Desafio da Moto",description:"Acelere, faça acrobacias incríveis e supere pistas radicais!",category:"Diversão",emoji:"🏍️",art:"yellow",url:"./moto.html"},
+  {title:"Super Pênalti",description:"Escolha o canto, chute com força e marque gols incríveis!",category:"Diversão",emoji:"⚽",art:"green",url:"./penalty.html"},
+  {title:"Jogo da Memória",description:"Encontre os pares e treine sua memória brincando.",category:"Raciocínio",emoji:"🧩",art:"blue",url:""},
+  {title:"Quebra-cabeça",description:"Junte as peças e descubra a imagem escondida.",category:"Raciocínio",emoji:"🧠",art:"pink",url:""}
 ];
 const grid=document.querySelector("#grid"),search=document.querySelector("#search"),empty=document.querySelector("#empty"),count=document.querySelector("#count"),toast=document.querySelector("#toast");let filter="Todos",timer;
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
