@@ -4,13 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Super Pênalti - BLIB</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 html,body{margin:0;height:100%;background:#12331f;font-family:'Trebuchet MS',sans-serif;color:#fff;overflow:hidden}
 #w{width:min(100vw,calc((100vh - 46px)*1.6));margin:0 auto}
-#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap}
+#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap;padding:0 10px}
 .b{background:#ffd43b;color:#222;border:0;border-radius:18px;padding:8px 14px;font:inherit;text-decoration:none;cursor:pointer;display:inline-block;margin:4px}
-canvas{width:100%;display:block;border-radius:10px;touch-action:none;cursor:crosshair}
+canvas{width:100%;display:block;border-radius:10px;touch-action:none;cursor:crosshair;background:#12331f}
 #ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:5}#ov.on{display:flex}
 .bx{background:#1f5a34;border-radius:20px;padding:20px;width:min(92vw,420px);text-align:center;max-height:92vh;overflow:auto}
 .bx input{font:inherit;font-size:20px;padding:10px;border-radius:12px;border:0;width:80%;text-align:center;margin:8px 0}
@@ -27,25 +26,257 @@ ol{text-align:left;font-size:18px;padding-left:34px}
 </div>
 <div id="ov"><div class="bx" id="bx"></div></div>
 
-<script>
-// Conexão Supabase com proteção contra erros de execução
-const SB_URL='https://lvfhxcmnqylioalsluvy.supabase.co', SB_KEY='sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';
-let sb = null;
-try {
-  if (window.supabase && SB_URL) {
-    sb = window.supabase.createClient(SB_URL, SB_KEY);
-  }
-} catch(e) { console.log("Supabase off", e); }
+<!-- SDK Supabase no final do body -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-const cv = document.getElementById('c'), x = cv.getContext('2d');
+<script>
+// Conexão Segura com Supabase
+const SB_URL = 'https://lvfhxcmnqylioalsluvy.supabase.co';
+const SB_KEY = 'sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';
+let sb = null;
+
+function initSupabase() {
+  try {
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      sb = window.supabase.createClient(SB_URL, SB_KEY);
+    }
+  } catch (e) {
+    console.log("Supabase não disponível, jogando offline.");
+  }
+}
+
+const cv = document.getElementById('c');
+const x = cv.getContext('2d');
 
 // Estados do Jogo
 let modo = 'mira'; // 'mira', 'voo', 'resultado'
 let chuteAtual = 0;
 const TOTAL_CHUTES = 5;
-let placar = []; // 1 para gol, 0 para erro
+let placar = [];
 let msgResultado = '';
 let tempoResultado = 0;
 
 // Elementos em Tela
-let bola = { x: 480, y: 500, r
+let bola = { x: 480, y: 500, r: 24, vx: 0, vy: 0, escala: 1 };
+let goleiro = { x: 480, y: 250, targetX: 480 };
+let arrasto = null;
+
+// Limites do Gol
+const GOL_ESQ = 310, GOL_DIR = 650, GOL_TOPO = 170, GOL_FUNDO = 300;
+
+function resetBola() {
+  bola.x = 480;
+  bola.y = 500;
+  bola.vx = 0;
+  bola.vy = 0;
+  bola.escala = 1;
+  goleiro.x = 480;
+  goleiro.targetX = 480;
+  modo = 'mira';
+}
+
+const getPos = e => {
+  const rect = cv.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * 960 / rect.width,
+    y: (e.clientY - rect.top) * 600 / rect.height
+  };
+};
+
+cv.addEventListener('pointerdown', e => {
+  if (modo !== 'mira') return;
+  arrasto = { inicio: getPos(e), atual: getPos(e) };
+});
+
+cv.addEventListener('pointermove', e => {
+  if (arrasto) arrasto.atual = getPos(e);
+});
+
+cv.addEventListener('pointerup', e => {
+  if (!arrasto || modo !== 'mira') return;
+  const p1 = arrasto.inicio, p2 = arrasto.atual;
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  arrasto = null;
+
+  if (dy < -20) {
+    chutar(dx, dy);
+  }
+});
+
+function chutar(dx, dy) {
+  modo = 'voo';
+  bola.vx = dx * 0.08;
+  bola.vy = dy * 0.08;
+
+  let miraX = bola.x + bola.vx * 25;
+  goleiro.targetX = Math.random() < 0.6 ? miraX : 320 + Math.random() * 320;
+}
+
+function update() {
+  if (modo === 'voo') {
+    bola.x += bola.vx;
+    bola.y += bola.vy;
+    bola.escala = Math.max(0.4, bola.escala - 0.015);
+
+    goleiro.x += (goleiro.targetX - goleiro.x) * 0.08;
+
+    if (bola.y <= GOL_FUNDO) {
+      modo = 'resultado';
+      tempoResultado = 0;
+      verificarResultado();
+    }
+  } else if (modo === 'resultado') {
+    tempoResultado += 1/60;
+    if (tempoResultado > 1.8) {
+      chuteAtual++;
+      if (chuteAtual < TOTAL_CHUTES) {
+        resetBola();
+        document.getElementById('inf').textContent = `Chute ${chuteAtual + 1} de ${TOTAL_CHUTES}`;
+      } else {
+        finalizarJogo();
+      }
+    }
+  }
+}
+
+function verificarResultado() {
+  const defendeu = Math.abs(bola.x - goleiro.x) < 55 && Math.abs(bola.y - goleiro.y) < 50;
+  const fora = bola.x < GOL_ESQ || bola.x > GOL_DIR || bola.y < GOL_TOPO;
+
+  if (defendeu) {
+    msgResultado = 'DEFENDEU!';
+    placar.push(0);
+  } else if (fora) {
+    msgResultado = 'PRA FORA!';
+    placar.push(0);
+  } else {
+    msgResultado = 'GOL!';
+    placar.push(1);
+  }
+}
+
+function draw() {
+  // Limpar Tela
+  x.clearRect(0, 0, 960, 600);
+
+  // Céu
+  x.fillStyle = '#4da6ff';
+  x.fillRect(0, 0, 960, 200);
+
+  // Gramado
+  x.fillStyle = '#2e8b57';
+  x.fillRect(0, 200, 960, 400);
+
+  // Linhas da Área
+  x.strokeStyle = '#ffffffa1';
+  x.lineWidth = 4;
+  x.beginPath();
+  x.moveTo(100, 600); x.lineTo(250, 280); x.lineTo(710, 280); x.lineTo(860, 600);
+  x.stroke();
+
+  // Trave e Rede
+  x.fillStyle = '#ffffff22';
+  x.fillRect(GOL_ESQ, GOL_TOPO, GOL_DIR - GOL_ESQ, GOL_FUNDO - GOL_TOPO);
+
+  x.strokeStyle = '#fff';
+  x.lineWidth = 8;
+  x.strokeRect(GOL_ESQ, GOL_TOPO, GOL_DIR - GOL_ESQ, GOL_FUNDO - GOL_TOPO);
+
+  // Goleiro
+  x.fillStyle = '#ff922b';
+  x.fillRect(goleiro.x - 20, goleiro.y - 30, 40, 50);
+  x.fillStyle = '#f1c27d';
+  x.beginPath(); x.arc(goleiro.x, goleiro.y - 40, 12, 0, Math.PI * 2); x.fill();
+
+  // Bola
+  x.save();
+  x.translate(bola.x, bola.y);
+  x.scale(bola.escala, bola.escala);
+  
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(0, 0, bola.r, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = '#222'; x.lineWidth = 2; x.stroke();
+
+  x.fillStyle = '#222';
+  x.beginPath(); x.arc(0, 0, 8, 0, Math.PI * 2); x.fill();
+  x.restore();
+
+  // Mira / Linha de Arrasto
+  if (arrasto && modo === 'mira') {
+    x.strokeStyle = '#ffd43b';
+    x.lineWidth = 4;
+    x.beginPath();
+    x.moveTo(arrasto.inicio.x, arrasto.inicio.y);
+    x.lineTo(arrasto.atual.x, arrasto.atual.y);
+    x.stroke();
+  }
+
+  // Placar de Bolinhas no Rodapé
+  for (let i = 0; i < TOTAL_CHUTES; i++) {
+    x.fillStyle = i < placar.length ? (placar[i] ? '#2ecc71' : '#e03131') : '#aaa';
+    x.beginPath();
+    x.arc(40 + i * 35, 560, 12, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // Texto de Resultado
+  if (modo === 'resultado') {
+    x.font = 'bold 60px "Trebuchet MS"';
+    x.textAlign = 'center';
+    x.fillStyle = msgResultado === 'GOL!' ? '#51cf66' : '#ff6b6b';
+    x.strokeStyle = '#000';
+    x.lineWidth = 6;
+    x.strokeText(msgResultado, 480, 120);
+    x.fillText(msgResultado, 480, 120);
+  }
+}
+
+async function finalizarJogo() {
+  const gols = placar.reduce((a, b) => a + b, 0);
+  const box = document.getElementById('bx');
+  document.getElementById('ov').classList.add('on');
+
+  box.innerHTML = `
+    <h2>⚽ Fim de Jogo!</h2>
+    <p>Você marcou <b>${gols} gol(s)</b> de ${TOTAL_CHUTES}</p>
+    <input id="nm" maxlength="15" placeholder="Seu apelido"><br>
+    <button class="b" id="sv">Salvar no ranking</button>
+    <p id="ms"></p>
+  `;
+
+  document.getElementById('sv').onclick = async () => {
+    const nome = document.getElementById('nm').value.trim();
+    if (!nome) return;
+
+    if (sb) {
+      await sb.from('blib_rankings').insert({
+        jogo_slug: 'penalty',
+        nome_jogador: nome,
+        pontuacao: gols
+      });
+    }
+
+    box.innerHTML = `
+      <h2>🏆 Mandou bem!</h2>
+      <p>Gols registrados para <b>${nome}</b>.</p>
+      <a class="b" href="./index.html">Voltar ao BLIB</a>
+    `;
+  };
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Inicialização Garantida
+window.addEventListener('load', () => {
+  initSupabase();
+  resetBola();
+  loop();
+});
+</script>
+</body>
+</html>
