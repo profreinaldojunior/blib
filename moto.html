@@ -8,7 +8,7 @@
 <style>
 html,body{margin:0;height:100%;background:#1d1b3a;font-family:'Trebuchet MS',sans-serif;color:#fff;overflow:hidden}
 #w{width:min(100vw,calc((100vh - 46px)*1.7778));margin:0 auto}
-#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap}
+#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap;padding:0 10px}
 .b{background:#ffd43b;color:#222;border:0;border-radius:18px;padding:8px 14px;font:inherit;text-decoration:none;cursor:pointer;display:inline-block}
 canvas{width:100%;display:block;border-radius:10px;background:#8fd3ff}
 #ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:5}#ov.on{display:flex}
@@ -21,9 +21,9 @@ ol{text-align:left;font-size:18px;padding-left:34px}
 <div id="w">
   <div id="bar">
     <a class="b" href="./index.html">← Voltar ao BLIB</a>
-    <span id="lv">Fase 1</span>
-    <span id="tm">⏱ 0.0s</span>
-    <span id="at">Tentativas: 1</span>
+    <span id="lv"></span>
+    <span id="tm"></span>
+    <span id="at"></span>
     <button class="b" id="rs">Reiniciar (R)</button>
   </div>
   <canvas id="c" width="960" height="540"></canvas>
@@ -31,216 +31,89 @@ ol{text-align:left;font-size:18px;padding-left:34px}
 <div id="ov"><div class="bx" id="bx"></div></div>
 
 <script>
-// Conexão Supabase com tratamento de falhas
-const SB_URL='https://lvfhxcmnqylioalsluvy.supabase.co', SB_KEY='sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';
-let sb = null;
+const SB_URL = 'https://lvfhxcmnqylioalsluvy.supabase.co';
+const SB_KEY = 'sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';
+let sb = null; 
+
 try {
-  if (window.supabase && SB_URL) {
-    sb = window.supabase.createClient(SB_URL, SB_KEY);
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    sb = window.supabase.createClient(SB_URL, SB_KEY, {
+      global: { headers: { apikey: SB_KEY } }
+    });
   }
-} catch(e) { console.log("Supabase off", e); }
+} catch(e) { console.warn("Supabase não carregado:", e); }
 
-const cv = document.getElementById('c'), x = cv.getContext('2d');
+const $ = id => document.getElementById(id), cv = $('c'), x = cv.getContext('2d'), G = 900, R = 12, K = 2200, C = 55, I = 1800, MAXV = 560;
+const LV = [
+{n:'Fase 1 - Colinas',fin:3800,pts:[[0,420],[500,420],[800,385],[1100,420],[1450,420],[1620,350,1],[1660,425,1],[2400,425],[2650,385],[2900,425],[3000,425],[3150,360,1],[3190,430,1],[3900,430]],hz:[['s',1690],['s',1710],['s',1730],['s',1750],['w',3260,8,22]]},
+{n:'Fase 2 - Rampas',fin:4300,pts:[[0,420],[400,420],[650,340],[900,420],[1200,420],[1400,330,1],[1440,440,1],[2100,440],[2300,380],[2500,440],[2800,440],[3000,350],[3300,440],[3500,440],[3700,360,1],[3730,450,1],[4400,450]],hz:[['s',1500],['s',1520],['s',1540],['s',1560],['w',3790,8,24],['s',3850],['s',3870]]}];
 
-// Configurações do Jogo
-let lvl = 0, att = 1, tempo = 0, totalTempo = 0, jogando = true, emAcao = true;
-let keys = {};
+function H(x){const p=L.pts;if(x<=p[0][0])return p[0][1];let i=0;while(i<p.length-2&&x>p[i+1][0])i++;const a=p[i],b=p[i+1];if(x>=b[0])return b[1];let t=(x-a[0])/(b[0]-a[0]);if(!b[2])t=(1-Math.cos(Math.PI*t))/2;return a[1]+(b[1]-a[1])*t}
+let L,lvl=0,b,t=0,bonus=0,att=1,total=0,state='play',timer=0,parts=[],toastT=0,toastM='',hz=[],tk=0;const down={};
 
-const FASES = [
-  { nome: 'Fase 1 - Colinas', fim: 3000 },
-  { nome: 'Fase 2 - Rampas Radicais', fim: 4000 }
-];
+function load(n){lvl=n;L=LV[n];hz=L.hz.map(h=>h[0]=='s'?{k:'s',x:h[1],y:H(h[1])-9,r:10}:{k:'w',x:h[1],y:H(h[1])-h[2],r:h[3]});b={x:80,y:H(80)-30,vx:0,vy:0,a:0,w:0,air:0,a0:0,at:0};t=0;bonus=0;state='play';parts=[]}
+function toast(m){toastM=m;toastT=120}
 
-// Cálculo da altura do terreno suave
-function getChao(x) {
-  return 400 + Math.sin(x / 180) * 40 + Math.cos(x / 400) * 30;
-}
+function sub(dt){const inp={up:down.ArrowUp||down.KeyW,dn:down.ArrowDown||down.KeyS,l:down.ArrowLeft||down.KeyA,r:down.ArrowRight||down.KeyD};
+ let ax=0,ay=G,al=((inp.r?1:0)-(inp.l?1:0))*9-b.w*1.5,touch=0;const ca=Math.cos(b.a),sa=Math.sin(b.a);
+ const F=(rx,ry,fx,fy)=>{ax+=fx;ay+=fy;al+=(rx*fy-ry*fx)/I};
+ [-26,26].forEach((lx,i)=>{const rx=lx*ca-16*sa,ry=lx*sa+16*ca,wx=b.x+rx,wy=b.y+ry,vx=b.vx-b.w*ry,vy=b.vy+b.w*rx,s=(H(wx+1)-H(wx-1))/2,Ln=Math.hypot(1,s),nx=s/Ln,ny=-1/Ln,tx=1/Ln,ty=s/Ln,pen=R-(H(wx)-wy)/Ln;
+  if(pen<=0)return;touch++;const fn=Math.max(0,K*pen-C*(vx*nx+vy*ny));F(rx,ry,fn*nx,fn*ny);
+  const vt=vx*tx+vy*ty;let ft=0;if(inp.dn)ft=vt>10?-450:(vt>-150?-300:0);else if(inp.up){if(i==0)ft=Math.max(0,700*(1-vt/MAXV))}else ft=-vt*.4;
+  F(rx,ry,ft*tx,ft*ty)});
+ b.vx+=ax*dt;b.vy+=ay*dt;b.w+=al*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.a+=b.w*dt;
+ if(b.x<15){b.x=15;b.vx=Math.max(b.vx,0)}
+ if(!touch){if(!b.air){b.air=1;b.a0=b.a;b.at=0}b.at+=dt}else if(b.air){b.air=0;const d=b.a-b.a0;if(b.at>.3&&Math.abs(d)>4.7){const f=Math.floor(Math.abs(d)/6.283+.25);if(f>0){bonus+=1.5*f;toast('Mortal x'+f+'!  -'+(1.5*f).toFixed(1)+'s')}}}
+ const hx=b.x+4*ca+34*sa,hy=b.y+4*sa-34*ca;if(hy+8>H(hx))return crash();
+ const pts=[[b.x+(-26)*ca-16*sa,b.y+(-26)*sa+16*ca,10],[b.x+26*ca-16*sa,b.y+26*sa+16*ca,10],[hx,hy,8],[b.x,b.y,12]];
+ for(const h of hz)for(const q of pts)if(Math.hypot(h.x-q[0],h.y-q[1])<h.r*.9+q[2])return crash();
+ if(b.x>L.fin){state='done';timer=100;const s=Math.max(0,t-bonus);total+=s;toast('Fase concluída em '+s.toFixed(1)+'s')}}
 
-// Objeto da Moto
-let moto = {
-  x: 100,
-  y: 300,
-  vx: 0,
-  vy: 0,
-  a: 0,
-  va: 0
-};
+function crash(){if(state!='play')return;state='crash';timer=55;att++;for(let i=0;i<45;i++){const a=Math.random()*6.28,s=80+Math.random()*320;parts.push({x:b.x,y:b.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-100,l:.5+Math.random()*.6,c:['#ff6a3d','#ffd43b','#444','#fff'][i%4]})}}
+function step(){tk++;if(toastT>0)toastT--;parts.forEach(p=>{p.x+=p.vx/60;p.y+=p.vy/60;p.vy+=15;p.l-=1/60});parts=parts.filter(p=>p.l>0);
+ if(state=='play'){t+=1/60;for(let i=0;i<4&&state=='play';i++)sub(1/240)}
+ else if(state=='crash'){if(--timer<=0)load(lvl)}
+ else if(state=='done'){if(--timer<=0){lvl<LV.length-1?load(lvl+1):finish()}}}
 
-function resetMoto() {
-  moto.x = 100;
-  moto.y = getChao(100) - 30;
-  moto.vx = 0;
-  moto.vy = 0;
-  moto.a = 0;
-  moto.va = 0;
-  jogando = true;
-}
+let camX=0,camY=0;
+function draw(){const g=x.createLinearGradient(0,0,0,540);g.addColorStop(0,'#7ec8ff');g.addColorStop(1,'#ffe9f3');x.fillStyle=g;x.fillRect(0,0,960,540);
+ if(!b)return;const tx=b.x-320,ty=b.y-330;camX+=(tx-camX)*.2;camY+=(ty-camY)*.08;
+ x.fillStyle='#b6a6e8';x.beginPath();x.moveTo(0,540);for(let s=0;s<=960;s+=20)x.lineTo(s,330+Math.sin((s+camX*.2)/110)*45);x.lineTo(960,540);x.fill();
+ x.beginPath();x.moveTo(0,540);for(let s=0;s<=960;s+=8)x.lineTo(s,H(camX+s)-camY);x.lineTo(960,540);x.fillStyle='#8a5a3a';x.fill();
+ x.beginPath();for(let s=0;s<=960;s+=8)x[s?'lineTo':'moveTo'](s,H(camX+s)-camY);x.strokeStyle='#51cf66';x.lineWidth=8;x.stroke();
+ for(const h of hz){const X=h.x-camX,Y=h.y-camY;if(X<-60||X>1020)continue;if(h.k=='s'){x.fillStyle='#ccc';x.beginPath();x.moveTo(X-10,Y+9);x.lineTo(X,Y-12);x.lineTo(X+10,Y+9);x.fill()}
+  else{x.save();x.translate(X,Y);x.rotate(tk/6);x.fillStyle='#9aa';x.beginPath();for(let i=0;i<16;i++){const r=i%2?h.r-6:h.r+3,a=i*Math.PI/8;x.lineTo(Math.cos(a)*r,Math.sin(a)*r)}x.fill();x.fillStyle='#556';x.beginPath();x.arc(0,0,6,0,7);x.fill();x.restore()}}
+ const fx=L.fin-camX,fy=H(L.fin)-camY;x.fillStyle='#fff';x.fillRect(fx-3,fy-140,6,140);for(let i=0;i<4;i++)for(let j=0;j<6;j++){x.fillStyle=(i+j)%2?'#fff':'#222';x.fillRect(fx+3+j*10,fy-140+i*10,10,10)}
+ if(state!='crash'){x.save();x.translate(b.x-camX,b.y-camY);x.rotate(b.a);
+  for(const lx of[-26,26]){x.strokeStyle='#222';x.lineWidth=5;x.beginPath();x.arc(lx,16,R-2,0,7);x.stroke();x.lineWidth=2;x.beginPath();x.moveTo(lx-8,16);x.lineTo(lx+8,16);x.moveTo(lx,8);x.lineTo(lx,24);x.stroke()}
+  x.strokeStyle='#e03131';x.lineWidth=6;x.beginPath();x.moveTo(-26,16);x.lineTo(-4,0);x.lineTo(14,2);x.lineTo(26,16);x.moveTo(14,2);x.lineTo(20,-8);x.stroke();
+  x.strokeStyle='#1c7ed6';x.lineWidth=8;x.beginPath();x.moveTo(-4,0);x.lineTo(2,-22);x.stroke();x.lineWidth=5;x.beginPath();x.moveTo(2,-20);x.lineTo(18,-8);x.stroke();
+  x.fillStyle='#ffd43b';x.beginPath();x.arc(4,-34,9,0,7);x.fill();x.fillStyle='#e03131';x.beginPath();x.arc(4,-34,9,3.14,6.28);x.fill();x.fillStyle='#222';x.fillRect(6,-33,6,4);x.restore()}
+ for(const p of parts){x.fillStyle=p.c;x.beginPath();x.arc(p.x-camX,p.y-camY,4+p.l*6,0,7);x.fill()}
+ if(toastT>0){x.globalAlpha=Math.min(1,toastT/30);x.font='bold 34px "Trebuchet MS"';x.textAlign='center';x.fillStyle='#fff';x.strokeStyle='#222';x.lineWidth=5;x.strokeText(toastM,480,110);x.fillText(toastM,480,110);x.globalAlpha=1}
+ $('lv').textContent=L.n;$('tm').textContent='⏱ '+Math.max(0,t-bonus).toFixed(1)+'s  (total '+total.toFixed(1)+'s)';$('at').textContent='Tentativas: '+att}
 
-// Controles
-window.addEventListener('keydown', e => {
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
-  keys[e.code] = true;
-  if (e.code === 'KeyR') restart();
+async function save(n,s){if(!sb)return 'Ranking indisponível.';const row=v=>({jogo_slug:'moto',nome_jogador:n,tempo_segundos:v});let r=await sb.from('blib_rankings').insert(row(+s.toFixed(2)));if(r.error)r=await sb.from('blib_rankings').insert(row(Math.round(s)));return r.error?'Não foi possível salvar: '+r.error.message:''}
+async function top(){if(!sb)return[];const r=await sb.from('blib_rankings').select('nome_jogador,tempo_segundos').eq('jogo_slug','moto').order('tempo_segundos',{ascending:true}).limit(5);return r.data||[]}
+function box(h){$('bx').innerHTML=h;$('ov').classList.add('on')}
+
+function finish(){state='end';box('<h2>🏁 Você completou tudo!</h2><p>Tempo total: <b>'+total.toFixed(2)+'s</b> em '+att+' tentativa(s)</p><input id="nm" maxlength="15" placeholder="Seu apelido"><br><button class="b" id="sv">Salvar no ranking</button><p id="ms"></p>');
+ $('sv').onclick=async()=>{const n=$('nm').value.trim().slice(0,15);if(!n){$('ms').textContent='Digite um apelido!';return}$('sv').disabled=true;const e=await save(n,total);const l=await top();
+  const o=document.createElement('ol');l.forEach(r=>{const li=document.createElement('li');li.textContent=r.nome_jogador+' — '+Number(r.tempo_segundos).toFixed(2)+'s';o.appendChild(li)});
+  $('bx').innerHTML='<h2>🏆 Top 5 melhores tempos</h2>';if(e){const p=document.createElement('p');p.textContent=e;$('bx').appendChild(p)}$('bx').appendChild(o);
+  $('bx').insertAdjacentHTML('beforeend','<button class="b" onclick="again()">Jogar novamente</button> <a class="b" href="./index.html">Voltar ao BLIB</a>')}}
+
+function again(){$('ov').classList.remove('on');total=0;att=1;load(0)}
+function restart(){if(state=='end')return;if(state=='play')att++;load(lvl)}
+addEventListener('keydown',e=>{if(e.target.tagName=='INPUT')return;if(e.code.startsWith('Arrow')||e.code=='Space')e.preventDefault();down[e.code]=1;if(e.code=='KeyR')restart()});
+addEventListener('keyup',e=>down[e.code]=0);addEventListener('blur',()=>{for(const k in down)down[k]=0});$('rs').onclick=restart;
+
+window.addEventListener('load', () => {
+  load(0);
+  let last=0,acc=0;
+  function loop(ts){acc+=Math.min(ts-last,100);last=ts;while(acc>=16.667){step();acc-=16.667}draw();requestAnimationFrame(loop)}
+  requestAnimationFrame(ts=>{last=ts;loop(ts)});
 });
-window.addEventListener('keyup', e => { keys[e.code] = false; });
-document.getElementById('rs').onclick = restart;
-
-function restart() {
-  att++;
-  resetMoto();
-}
-
-// Loop de Física
-function update() {
-  if (!jogando) return;
-
-  tempo += 1/60;
-
-  // Aceleração e Freio
-  if (keys['ArrowUp'] || keys['KeyW']) moto.vx += 0.25;
-  if (keys['ArrowDown'] || keys['KeyS']) moto.vx -= 0.15;
-
-  // Inclinação / Acrobacias
-  if (keys['ArrowLeft'] || keys['KeyA']) moto.va -= 0.005;
-  if (keys['ArrowRight'] || keys['KeyD']) moto.va += 0.005;
-
-  // Gravidade e atrito
-  moto.vy += 0.3;
-  moto.vx *= 0.98;
-  moto.va *= 0.95;
-
-  moto.x += moto.vx;
-  moto.y += moto.vy;
-  moto.a += moto.va;
-
-  // Colisão com o solo
-  let chaoY = getChao(moto.x);
-  if (moto.y >= chaoY - 20) {
-    moto.y = chaoY - 20;
-    moto.vy = 0;
-    moto.vx *= 0.96; // atrito do chão
-
-    // Se bater muito inclinado de cabeça = Morte/Reinício
-    let anguloNorm = Math.abs(moto.a % (Math.PI * 2));
-    if (anguloNorm > 1.8 && anguloNorm < 4.5) {
-      restart();
-    } else {
-      moto.a *= 0.8; // alinha com o chão
-    }
-  }
-
-  // Chegada
-  if (moto.x >= FASES[lvl].fim) {
-    totalTempo += tempo;
-    if (lvl < FASES.length - 1) {
-      lvl++;
-      tempo = 0;
-      resetMoto();
-    } else {
-      jogando = false;
-      finalizarJogo();
-    }
-  }
-
-  // Atualiza placar topo
-  document.getElementById('lv').textContent = FASES[lvl].nome;
-  document.getElementById('tm').textContent = `⏱ ${tempo.toFixed(1)}s (Total: ${totalTempo.toFixed(1)}s)`;
-  document.getElementById('at').textContent = `Tentativas: ${att}`;
-}
-
-// Renderização Gráfica
-function draw() {
-  // Cópia da Câmera
-  let camX = moto.x - 200;
-  let camY = moto.y - 300;
-
-  // Fundo
-  x.fillStyle = '#7ec8ff';
-  x.fillRect(0, 0, 960, 540);
-
-  x.save();
-  x.translate(-camX, -camY);
-
-  // Desenhar Terreno
-  x.fillStyle = '#51cf66';
-  x.beginPath();
-  x.moveTo(camX - 100, 1000);
-  for (let sx = camX - 100; sx <= camX + 1100; sx += 20) {
-    x.lineTo(sx, getChao(sx));
-  }
-  x.lineTo(camX + 1100, 1000);
-  x.fill();
-
-  // Linha de Chegada
-  let finX = FASES[lvl].fim;
-  x.fillStyle = '#fff';
-  x.fillRect(finX, getChao(finX) - 100, 10, 100);
-  x.fillStyle = '#000';
-  x.fillRect(finX + 10, getChao(finX) - 100, 15, 30);
-
-  // Desenhar Moto e Piloto
-  x.save();
-  x.translate(moto.x, moto.y);
-  x.rotate(moto.a);
-
-  // Rodas
-  x.fillStyle = '#222';
-  x.beginPath(); x.arc(-18, 10, 10, 0, Math.PI*2); x.fill();
-  x.beginPath(); x.arc(18, 10, 10, 0, Math.PI*2); x.fill();
-
-  // Corpo da Moto
-  x.fillStyle = '#e03131';
-  x.fillRect(-15, -5, 30, 10);
-
-  // Piloto
-  x.fillStyle = '#ffd43b';
-  x.beginPath(); x.arc(0, -18, 7, 0, Math.PI*2); x.fill();
-
-  x.restore();
-  x.restore();
-}
-
-// Finalização e Ranking
-async function finalizarJogo() {
-  const box = document.getElementById('bx');
-  document.getElementById('ov').classList.add('on');
-  
-  box.innerHTML = `
-    <h2>🏁 Você completou tudo!</h2>
-    <p>Tempo Total: <b>${totalTempo.toFixed(2)}s</b></p>
-    <input id="nm" maxlength="15" placeholder="Seu apelido"><br>
-    <button class="b" id="sv">Salvar no ranking</button>
-    <p id="ms"></p>
-  `;
-
-  document.getElementById('sv').onclick = async () => {
-    const nome = document.getElementById('nm').value.trim();
-    if (!nome) return;
-    
-    if (sb) {
-      await sb.from('blib_rankings').insert({
-        jogo_slug: 'moto',
-        nome_jogador: nome,
-        tempo_segundos: +totalTempo.toFixed(2)
-      });
-    }
-
-    box.innerHTML = `
-      <h2>🏆 Mandou muito bem!</h2>
-      <p>Pontuação registrada para <b>${nome}</b>.</p>
-      <a class="b" href="./index.html">Voltar ao BLIB</a>
-    `;
-  };
-}
-
-// Main Loop
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-resetMoto();
-loop();
 </script>
 </body>
 </html>
