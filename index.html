@@ -29,11 +29,11 @@ main{max-width:1150px;margin:auto;padding:25px 20px 50px}.heading{display:flex;a
 <script>
 const games=[
 {title:"Meu Mundo Toy",description:"Crie personagens, invente estilos e monte seu próprio mundinho.",category:"Criatividade",emoji:"🧸",art:"purple",url:"https://meu-mundo-toy.vercel.app/"},
-{title:"Estúdio de Desenho",description:"Solte a imaginação com cores, formas e desenhos.",category:"Criatividade",emoji:"🎨",art:"pink",url:""},
+{title:"Foguinho e Água",description:"Trabalhe em equipe para superar os obstáculos e resolver os puzzles!",category:"Raciocínio",emoji:"🔥💧",art:"orange",url:"./fogoeagua.html"},
 {title:"Jogo da Memória",description:"Encontre os pares e treine sua memória brincando.",category:"Raciocínio",emoji:"🧩",art:"blue",url:""},
 {title:"Quebra-cabeça",description:"Junte as peças e descubra a imagem escondida.",category:"Raciocínio",emoji:"🧠",art:"yellow",url:""},
 {title:"Labirinto Maluco",description:"Encontre o caminho certo e chegue até a saída.",category:"Diversão",emoji:"🌀",art:"green",url:""},
-{title:"Desafio dos Números",description:"Pequenos desafios para praticar matemática.",category:"Raciocínio",emoji:"🔢",art:"orange",url:""}
+{title:"Desafio dos Números",description:"Pequenos desafios para praticar matemática.",category:"Raciocínio",emoji:"🔢",art:"pink",url:""}
 ];
 const grid=document.querySelector("#grid"),search=document.querySelector("#search"),empty=document.querySelector("#empty"),count=document.querySelector("#count"),toast=document.querySelector("#toast");let filter="Todos",timer;
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
@@ -43,7 +43,7 @@ function render(){
   
   grid.innerHTML=list.map(g=>{
     if(g.url){
-      return `<a class="card" href="${esc(g.url)}" target="_blank" aria-label="Jogar ${esc(g.title)}">
+      return `<a class="card" href="${esc(g.url)}" ${g.url.startsWith("http")?'target="_blank"':''} aria-label="Jogar ${esc(g.title)}">
         <div class="art ${esc(g.art)}"><span class="emoji" aria-hidden="true">${esc(g.emoji)}</span></div>
         <div class="info">
           <h3>${esc(g.title)}</h3>
