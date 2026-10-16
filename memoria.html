@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jogo da Memória - BLIB</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+html,body{margin:0;height:100%;background:#1d1b3a;font-family:'Trebuchet MS',sans-serif;color:#fff;overflow:hidden}
+#w{width:min(100vw,calc((100vh - 46px)*1.6));margin:0 auto}
+#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap}
+.b{background:#ffd43b;color:#222;border:0;border-radius:18px;padding:8px 14px;font:inherit;text-decoration:none;cursor:pointer;display:inline-block;margin:4px}
+canvas{width:100%;display:block;border-radius:10px;touch-action:manipulation;cursor:pointer}
+#ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:5}#ov.on{display:flex}
+.bx{background:#2b2862;border-radius:20px;padding:20px;width:min(92vw,420px);text-align:center;max-height:92vh;overflow:auto}
+.bx input{font:inherit;font-size:20px;padding:10px;border-radius:12px;border:0;width:80%;text-align:center;margin:8px 0}
+ol{text-align:left;font-size:18px;padding-left:34px}
+</style></head><body>
+<div id="w"><div id="bar"><a class="b" href="./index.html">← Voltar ao BLIB</a><span id="lv"></span><span id="tm"></span><span id="mv"></span><button class="b" id="rs">Reiniciar (R)</button></div><canvas id="c" width="960" height="600"></canvas></div>
+<div id="ov"><div class="bx" id="bx"></div></div>
+<script>
+const SB_URL='https://lvfhxcmnqylioalsluvy.supabase.co',SB_KEY='sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';let sb=null;try{if(window.supabase&&!SB_URL.startsWith('SUA_'))sb=supabase.createClient(SB_URL,SB_KEY)}catch(e){}
+const $=id=>document.getElementById(id),cv=$('c'),x=cv.getContext('2d');
+if(!x.roundRect)x.roundRect=function(a,b,w,h){this.rect(a,b,w,h)};
+const SYM=['📚','✏️','🎒','🔬','🌎','🎨','🎵','⚽','🧮','🔭'],LV=[{c:4,r:3},{c:4,r:4},{c:5,r:4}],COL=['#ff6b6b','#4dabf7','#51cf66','#ffd43b','#cc5de8'];
+let lvl=0,cards=[],sel=[],lock=0,mv=0,tl=0,total=0,tmv=0,st='play',tmr=0,fx=[],msg='',tk=0;
+function load(n){lvl=n;const{c,r}=LV[n],gap=14,cw=Math.min((900-gap*(c-1))/c,(570-gap*(r-1))/r),ox=(960-(cw*c+gap*(c-1)))/2,oy=(600-(cw*r+gap*(r-1)))/2;
+ const a=[];for(let i=0;i<c*r/2;i++)a.push(SYM[i%SYM.length],SYM[i%SYM.length]);for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+ cards=a.map((s,i)=>({s,x:ox+(i%c)*(cw+gap),y:oy+Math.floor(i/c)*(cw+gap),w:cw,f:0,face:0,m:0}));sel=[];lock=0;mv=0;tl=0;st='play';msg='';fx=[]}
+function flip(cd){if(st!='play'||lock>0||cd.m||cd.face||sel.length>=2)return;cd.face=1;sel.push(cd);if(sel.length==2){mv++;lock=.9}}
+function resolve(){const[a,b]=sel;if(a.s==b.s){a.m=b.m=1;for(const k of[a,b])for(let i=0;i<14;i++)fx.push({x:k.x+k.w/2,y:k.y+k.w/2,vx:(Math.random()-.5)*400,vy:(Math.random()-.5)*400,l:.7,c:COL[i%5]})}else{a.face=b.face=0}sel=[];
+ if(cards.every(k=>k.m)){st='done';tmr=1.6;total+=tl;tmv+=mv;msg=lvl<LV.length-1?'Fase '+(lvl+1)+' concluída! 🎉':'Você completou tudo! 🏆'}}
+function update(dt){tk+=dt;fx.forEach(f=>{f.x+=f.vx*dt;f.y+=f.vy*dt;f.l-=dt});fx=fx.filter(f=>f.l>0);
+ cards.forEach(k=>{k.f+=Math.sign(k.face-k.f)*Math.min(Math.abs(k.face-k.f),dt*5)});
+ if(st=='play'){tl+=dt;if(lock>0){lock-=dt;if(lock<=0&&sel.length==2)resolve()}}
+ else if(st=='done'){tmr-=dt;if(tmr<=0){if(lvl<LV.length-1)load(lvl+1);else{st='end';finish()}}}}
+function draw(){const g=x.createLinearGradient(0,0,0,600);g.addColorStop(0,'#7ec8ff');g.addColorStop(1,'#ffd1e8');x.fillStyle=g;x.fillRect(0,0,960,600);
+ for(const k of cards){const sx=Math.abs(Math.cos(k.f*Math.PI)),cx=k.x+k.w/2;x.save();x.translate(cx,0);x.scale(Math.max(.02,sx),1);x.translate(-cx,0);
+  x.fillStyle='#0003';x.beginPath();x.roundRect(k.x+3,k.y+5,k.w,k.w,14);x.fill();
+  if(k.f<.5){const q=x.createLinearGradient(k.x,k.y,k.x+k.w,k.y+k.w);q.addColorStop(0,'#7b5cff');q.addColorStop(1,'#c77dff');x.fillStyle=q;x.beginPath();x.roundRect(k.x,k.y,k.w,k.w,14);x.fill();x.fillStyle='#fff9';x.font='bold '+k.w*.5+'px "Trebuchet MS"';x.textAlign='center';x.textBaseline='middle';x.fillText('?',cx,k.y+k.w/2)}
+  else{x.fillStyle=k.m?'#d3f9d8':'#fff';x.beginPath();x.roundRect(k.x,k.y,k.w,k.w,14);x.fill();x.strokeStyle=k.m?'#51cf66':'#ffd43b';x.lineWidth=5;x.stroke();x.font=k.w*.55+'px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#000';x.fillText(k.s,cx,k.y+k.w/2+2)}x.restore()}
+ fx.forEach(f=>{x.fillStyle=f.c;x.beginPath();x.arc(f.x,f.y,6*f.l+2,0,7);x.fill()});
+ if(st=='done'){x.fillStyle='#0008';x.fillRect(0,230,960,130);x.font='bold 54px "Trebuchet MS"';x.textAlign='center';x.fillStyle='#fff';x.fillText(msg,480,310)}
+ $('lv').textContent='Fase '+(lvl+1)+'/'+LV.length;$('tm').textContent='⏱ '+tl.toFixed(1)+'s (total '+(total+(st=='play'?tl:0)).toFixed(1)+'s)';$('mv').textContent='Jogadas: '+mv}
+async function save(n,s,m){if(!sb)return 'Ranking indisponível (Supabase não configurado).';const row=v=>({jogo_slug:'memoria',nome_jogador:n,tempo_segundos:v,pontuacao:m});let r=await sb.from('blib_rankings').insert(row(+s.toFixed(2)));if(r.error)r=await sb.from('blib_rankings').insert(row(Math.round(s)));return r.error?'Não foi possível salvar: '+r.error.message:''}
+async function getTop(){if(!sb)return[];const r=await sb.from('blib_rankings').select('nome_jogador,tempo_segundos,pontuacao').eq('jogo_slug','memoria').order('tempo_segundos',{ascending:true}).limit(5);return r.data||[]}
+function box(h){$('bx').innerHTML=h;$('ov').classList.add('on')}
+function finish(){box('<h2>🏁 Parabéns!</h2><p>Tempo total: <b>'+total.toFixed(2)+'s</b> em <b>'+tmv+'</b> jogadas</p><input id="nm" maxlength="15" placeholder="Seu apelido"><br><button class="b" id="sv">Salvar no ranking</button><p id="ms"></p>');
+ $('sv').onclick=async()=>{const n=$('nm').value.trim().slice(0,15);if(!n){$('ms').textContent='Digite um apelido!';return}$('sv').disabled=true;const e=await save(n,total,tmv),l=await getTop();
+  const o=document.createElement('ol');l.forEach(r=>{const li=document.createElement('li');li.textContent=r.nome_jogador+' — '+Number(r.tempo_segundos).toFixed(2)+'s'+(r.pontuacao!=null?' ('+r.pontuacao+' jogadas)':'');o.appendChild(li)});
+  $('bx').innerHTML='<h2>🏆 Top 5 melhores tempos</h2>';if(e){const p=document.createElement('p');p.textContent=e;$('bx').appendChild(p)}$('bx').appendChild(o);
+  $('bx').insertAdjacentHTML('beforeend','<button class="b" onclick="again()">Jogar novamente</button> <a class="b" href="./index.html">Voltar ao BLIB</a>')}}
+function again(){$('ov').classList.remove('on');total=0;tmv=0;load(0)}
+function restart(){if(st=='end')return;load(lvl)}
+cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect(),px=(e.clientX-r.left)*960/r.width,py=(e.clientY-r.top)*600/r.height;const k=cards.find(k=>px>=k.x&&px<=k.x+k.w&&py>=k.y&&py<=k.y+k.w);if(k)flip(k)});
+addEventListener('keydown',e=>{if(e.target.tagName=='INPUT')return;if(e.code=='KeyR')restart()});$('rs').onclick=restart;
+load(0);let last=0;function loop(ts){update(Math.min((ts-last)/1000,.1));last=ts;draw();requestAnimationFrame(loop)}requestAnimationFrame(ts=>{last=ts;loop(ts)});
+</script></body></html>
