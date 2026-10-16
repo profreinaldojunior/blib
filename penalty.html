@@ -1,282 +1,73 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Super Pênalti - BLIB</title>
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Super Pênalti - BLIB</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 html,body{margin:0;height:100%;background:#12331f;font-family:'Trebuchet MS',sans-serif;color:#fff;overflow:hidden}
 #w{width:min(100vw,calc((100vh - 46px)*1.6));margin:0 auto}
-#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap;padding:0 10px}
+#bar{display:flex;gap:8px;align-items:center;justify-content:space-between;height:46px;font-weight:bold;font-size:15px;white-space:nowrap}
 .b{background:#ffd43b;color:#222;border:0;border-radius:18px;padding:8px 14px;font:inherit;text-decoration:none;cursor:pointer;display:inline-block;margin:4px}
-canvas{width:100%;display:block;border-radius:10px;touch-action:none;cursor:crosshair;background:#12331f}
+canvas{width:100%;display:block;border-radius:10px;touch-action:none;cursor:crosshair}
 #ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:5}#ov.on{display:flex}
 .bx{background:#1f5a34;border-radius:20px;padding:20px;width:min(92vw,420px);text-align:center;max-height:92vh;overflow:auto}
 .bx input{font:inherit;font-size:20px;padding:10px;border-radius:12px;border:0;width:80%;text-align:center;margin:8px 0}
 ol{text-align:left;font-size:18px;padding-left:34px}
-</style>
-</head>
-<body>
-<div id="w">
-  <div id="bar">
-    <a class="b" href="./index.html">← Voltar ao BLIB</a>
-    <span id="inf">Chute 1 de 5</span>
-  </div>
-  <canvas id="c" width="960" height="600"></canvas>
-</div>
+</style></head><body>
+<div id="w"><div id="bar"><a class="b" href="./index.html">← Voltar ao BLIB</a><span id="inf"></span></div><canvas id="c" width="960" height="600"></canvas></div>
 <div id="ov"><div class="bx" id="bx"></div></div>
-
-<!-- SDK Supabase no final do body -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
-// Conexão Segura com Supabase
-const SB_URL = 'https://lvfhxcmnqylioalsluvy.supabase.co';
-const SB_KEY = 'sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';
-let sb = null;
-
-function initSupabase() {
-  try {
-    if (window.supabase && typeof window.supabase.createClient === 'function') {
-      sb = window.supabase.createClient(SB_URL, SB_KEY);
-    }
-  } catch (e) {
-    console.log("Supabase não disponível, jogando offline.");
-  }
-}
-
-const cv = document.getElementById('c');
-const x = cv.getContext('2d');
-
-// Estados do Jogo
-let modo = 'mira'; // 'mira', 'voo', 'resultado'
-let chuteAtual = 0;
-const TOTAL_CHUTES = 5;
-let placar = [];
-let msgResultado = '';
-let tempoResultado = 0;
-
-// Elementos em Tela
-let bola = { x: 480, y: 500, r: 24, vx: 0, vy: 0, escala: 1 };
-let goleiro = { x: 480, y: 250, targetX: 480 };
-let arrasto = null;
-
-// Limites do Gol
-const GOL_ESQ = 310, GOL_DIR = 650, GOL_TOPO = 170, GOL_FUNDO = 300;
-
-function resetBola() {
-  bola.x = 480;
-  bola.y = 500;
-  bola.vx = 0;
-  bola.vy = 0;
-  bola.escala = 1;
-  goleiro.x = 480;
-  goleiro.targetX = 480;
-  modo = 'mira';
-}
-
-const getPos = e => {
-  const rect = cv.getBoundingClientRect();
-  return {
-    x: (e.clientX - rect.left) * 960 / rect.width,
-    y: (e.clientY - rect.top) * 600 / rect.height
-  };
-};
-
-cv.addEventListener('pointerdown', e => {
-  if (modo !== 'mira') return;
-  arrasto = { inicio: getPos(e), atual: getPos(e) };
-});
-
-cv.addEventListener('pointermove', e => {
-  if (arrasto) arrasto.atual = getPos(e);
-});
-
-cv.addEventListener('pointerup', e => {
-  if (!arrasto || modo !== 'mira') return;
-  const p1 = arrasto.inicio, p2 = arrasto.atual;
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  arrasto = null;
-
-  if (dy < -20) {
-    chutar(dx, dy);
-  }
-});
-
-function chutar(dx, dy) {
-  modo = 'voo';
-  bola.vx = dx * 0.08;
-  bola.vy = dy * 0.08;
-
-  let miraX = bola.x + bola.vx * 25;
-  goleiro.targetX = Math.random() < 0.6 ? miraX : 320 + Math.random() * 320;
-}
-
-function update() {
-  if (modo === 'voo') {
-    bola.x += bola.vx;
-    bola.y += bola.vy;
-    bola.escala = Math.max(0.4, bola.escala - 0.015);
-
-    goleiro.x += (goleiro.targetX - goleiro.x) * 0.08;
-
-    if (bola.y <= GOL_FUNDO) {
-      modo = 'resultado';
-      tempoResultado = 0;
-      verificarResultado();
-    }
-  } else if (modo === 'resultado') {
-    tempoResultado += 1/60;
-    if (tempoResultado > 1.8) {
-      chuteAtual++;
-      if (chuteAtual < TOTAL_CHUTES) {
-        resetBola();
-        document.getElementById('inf').textContent = `Chute ${chuteAtual + 1} de ${TOTAL_CHUTES}`;
-      } else {
-        finalizarJogo();
-      }
-    }
-  }
-}
-
-function verificarResultado() {
-  const defendeu = Math.abs(bola.x - goleiro.x) < 55 && Math.abs(bola.y - goleiro.y) < 50;
-  const fora = bola.x < GOL_ESQ || bola.x > GOL_DIR || bola.y < GOL_TOPO;
-
-  if (defendeu) {
-    msgResultado = 'DEFENDEU!';
-    placar.push(0);
-  } else if (fora) {
-    msgResultado = 'PRA FORA!';
-    placar.push(0);
-  } else {
-    msgResultado = 'GOL!';
-    placar.push(1);
-  }
-}
-
-function draw() {
-  // Limpar Tela
-  x.clearRect(0, 0, 960, 600);
-
-  // Céu
-  x.fillStyle = '#4da6ff';
-  x.fillRect(0, 0, 960, 200);
-
-  // Gramado
-  x.fillStyle = '#2e8b57';
-  x.fillRect(0, 200, 960, 400);
-
-  // Linhas da Área
-  x.strokeStyle = '#ffffffa1';
-  x.lineWidth = 4;
-  x.beginPath();
-  x.moveTo(100, 600); x.lineTo(250, 280); x.lineTo(710, 280); x.lineTo(860, 600);
-  x.stroke();
-
-  // Trave e Rede
-  x.fillStyle = '#ffffff22';
-  x.fillRect(GOL_ESQ, GOL_TOPO, GOL_DIR - GOL_ESQ, GOL_FUNDO - GOL_TOPO);
-
-  x.strokeStyle = '#fff';
-  x.lineWidth = 8;
-  x.strokeRect(GOL_ESQ, GOL_TOPO, GOL_DIR - GOL_ESQ, GOL_FUNDO - GOL_TOPO);
-
-  // Goleiro
-  x.fillStyle = '#ff922b';
-  x.fillRect(goleiro.x - 20, goleiro.y - 30, 40, 50);
-  x.fillStyle = '#f1c27d';
-  x.beginPath(); x.arc(goleiro.x, goleiro.y - 40, 12, 0, Math.PI * 2); x.fill();
-
-  // Bola
-  x.save();
-  x.translate(bola.x, bola.y);
-  x.scale(bola.escala, bola.escala);
-  
-  x.fillStyle = '#fff';
-  x.beginPath(); x.arc(0, 0, bola.r, 0, Math.PI * 2); x.fill();
-  x.strokeStyle = '#222'; x.lineWidth = 2; x.stroke();
-
-  x.fillStyle = '#222';
-  x.beginPath(); x.arc(0, 0, 8, 0, Math.PI * 2); x.fill();
-  x.restore();
-
-  // Mira / Linha de Arrasto
-  if (arrasto && modo === 'mira') {
-    x.strokeStyle = '#ffd43b';
-    x.lineWidth = 4;
-    x.beginPath();
-    x.moveTo(arrasto.inicio.x, arrasto.inicio.y);
-    x.lineTo(arrasto.atual.x, arrasto.atual.y);
-    x.stroke();
-  }
-
-  // Placar de Bolinhas no Rodapé
-  for (let i = 0; i < TOTAL_CHUTES; i++) {
-    x.fillStyle = i < placar.length ? (placar[i] ? '#2ecc71' : '#e03131') : '#aaa';
-    x.beginPath();
-    x.arc(40 + i * 35, 560, 12, 0, Math.PI * 2);
-    x.fill();
-  }
-
-  // Texto de Resultado
-  if (modo === 'resultado') {
-    x.font = 'bold 60px "Trebuchet MS"';
-    x.textAlign = 'center';
-    x.fillStyle = msgResultado === 'GOL!' ? '#51cf66' : '#ff6b6b';
-    x.strokeStyle = '#000';
-    x.lineWidth = 6;
-    x.strokeText(msgResultado, 480, 120);
-    x.fillText(msgResultado, 480, 120);
-  }
-}
-
-async function finalizarJogo() {
-  const gols = placar.reduce((a, b) => a + b, 0);
-  const box = document.getElementById('bx');
-  document.getElementById('ov').classList.add('on');
-
-  box.innerHTML = `
-    <h2>⚽ Fim de Jogo!</h2>
-    <p>Você marcou <b>${gols} gol(s)</b> de ${TOTAL_CHUTES}</p>
-    <input id="nm" maxlength="15" placeholder="Seu apelido"><br>
-    <button class="b" id="sv">Salvar no ranking</button>
-    <p id="ms"></p>
-  `;
-
-  document.getElementById('sv').onclick = async () => {
-    const nome = document.getElementById('nm').value.trim();
-    if (!nome) return;
-
-    if (sb) {
-      await sb.from('blib_rankings').insert({
-        jogo_slug: 'penalty',
-        nome_jogador: nome,
-        pontuacao: gols
-      });
-    }
-
-    box.innerHTML = `
-      <h2>🏆 Mandou bem!</h2>
-      <p>Gols registrados para <b>${nome}</b>.</p>
-      <a class="b" href="./index.html">Voltar ao BLIB</a>
-    `;
-  };
-}
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-// Inicialização Garantida
-window.addEventListener('load', () => {
-  initSupabase();
-  resetBola();
-  loop();
-});
-</script>
-</body>
-</html>
+const SB_URL='https://lvfhxcmnqylioalsluvy.supabase.co',SB_KEY='sb_publishable_gZ4FF1BgIlhIzK1b4y91bQ_YPw9WfXN';let sb=null;try{if(window.supabase&&!SB_URL.startsWith('SUA_'))sb=supabase.createClient(SB_URL,SB_KEY)}catch(e){}
+const $=id=>document.getElementById(id),cv=$('c'),x=cv.getContext('2d'),GL=310,GR=650,GT=170,GB=300,BX=480,BY=500,TOTAL=5;
+if(!x.roundRect)x.roundRect=function(a,b,w,h){this.rect(a,b,w,h)};
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+let st='aim',res=[],drag=null,sh=null,kp=null,fx=[],tm=0,msg='',rt=0,hint=0,rot=0;
+function fire(dx,dy,cu){if(st!='aim')return;const len=Math.min(Math.hypot(dx,dy),330),p=len/330,tx=BX+dx*1.2,ty=325-(len-70)*.9,T=1.15-.55*p;
+ const ok=Math.random()<.45,ax=ok?tx+(Math.random()-.5)*90:BX+(Math.random()<.5?-1:1)*(40+Math.random()*120),ay=ok?cl(ty+10,195,265):250;
+ sh={tx,ty,T,t:0,cu:cl(cu,-130,130),arc:60*p,p,x:BX,y:BY,s:1};kp={ax,ay,x:BX,y:255};st='fly';msg=''}
+function outcome(){const{tx,ty,p}=sh,rx=56*(1-.3*p),ry=58;
+ if(tx<GL||tx>GR||ty<GT)return['miss','PRA FORA!'];if(ty>GB+8)return['miss','CHUTE FRACO!'];
+ if(((tx-kp.ax)/rx)**2+((ty-kp.ay)/ry)**2<1)return['save','DEFENDEU!'];
+ if(tx-GL<10||GR-tx<10||ty-GT<10)return['post','NA TRAVE!'];return['goal','GOL!']}
+function update(dt){tm+=dt;rot+=dt*8;
+ fx.forEach(f=>{f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=300*dt;f.l-=dt});fx=fx.filter(f=>f.l>0);
+ if(st=='fly'){sh.t+=dt;const u=Math.min(sh.t/sh.T,1);sh.x=BX+(sh.tx-BX)*u+sh.cu*Math.sin(Math.PI*u);sh.y=BY+(sh.ty-BY)*u-sh.arc*Math.sin(Math.PI*u);sh.s=1-.58*u;
+  const k=cl((sh.t-.1)/.45,0,1),e=1-(1-k)*(1-k);kp.x=BX+(kp.ax-BX)*e;kp.y=255+(kp.ay-255)*e;
+  if(u>=1){const[o,m]=outcome();sh.o=o;msg=m;res.push(o=='goal'?1:0);st='res';rt=0;if(o=='goal')for(let i=0;i<70;i++)fx.push({x:480,y:200,vx:(Math.random()-.5)*500,vy:-Math.random()*380,l:1.6,c:['#ffd43b','#ff6b6b','#4dabf7','#51cf66','#fff'][i%5]})}}
+ else if(st=='res'){rt+=dt;if(rt>1.6){if(res.length>=TOTAL){st='end';finish()}else{st='aim';sh=null;kp=null;msg=''}}}
+ else if(st=='aim')hint+=dt}
+function ball(X,Y,s){const r=26*s;x.fillStyle='#0003';x.beginPath();x.ellipse(X,Y+r*.9,r*.9,r*.28,0,0,7);x.fill();x.save();x.translate(X,Y);x.rotate(rot);x.fillStyle='#fff';x.beginPath();x.arc(0,0,r,0,7);x.fill();x.strokeStyle='#333';x.lineWidth=1.5;x.stroke();x.fillStyle='#222';x.beginPath();for(let i=0;i<5;i++){const a=i*1.2566;x.lineTo(Math.cos(a)*r*.38,Math.sin(a)*r*.38)}x.fill();for(let i=0;i<5;i++){const a=i*1.2566+.63;x.beginPath();x.arc(Math.cos(a)*r*.82,Math.sin(a)*r*.82,r*.16,0,7);x.fill()}x.restore()}
+function draw(){const g=x.createLinearGradient(0,0,0,170);g.addColorStop(0,'#5ec2ff');g.addColorStop(1,'#cdeeff');x.fillStyle=g;x.fillRect(0,0,960,600);
+ for(let r=0;r<4;r++)for(let i=0;i<48;i++){x.fillStyle=['#e03131','#ffd43b','#4dabf7','#fff','#51cf66','#cc5de8'][(i*7+r*3)%6];x.beginPath();x.arc(10+i*20+(r%2)*8,40+r*24,8,0,7);x.fill()}
+ x.fillStyle='#1c7ed6';x.fillRect(0,135,960,28);x.fillStyle='#fff';x.font='bold 18px sans-serif';x.textAlign='left';for(let i=0;i<6;i++)x.fillText('BLIB ⚽',20+i*165,155);
+ for(let i=0;i<10;i++){const y0=165+435*Math.pow(i/10,1.7),y1=165+435*Math.pow((i+1)/10,1.7);x.fillStyle=i%2?'#37a043':'#3fae49';x.fillRect(0,y0,960,y1-y0+1)}
+ x.strokeStyle='#fffc';x.lineWidth=4;x.beginPath();x.moveTo(60,GB);x.lineTo(900,GB);x.moveTo(190,GB);x.lineTo(60,440);x.lineTo(900,440);x.lineTo(770,GB);x.stroke();x.fillStyle='#fff';x.beginPath();x.ellipse(BX,525,16,5,0,0,7);x.fill();
+ const sk=st=='res'&&sh&&sh.o=='goal'?Math.sin(rt*30)*3*Math.max(0,1-rt):0;
+ x.fillStyle='#ffffff22';x.fillRect(GL+30,GT+14,GR-GL-60,GB-GT-20);x.strokeStyle='#ffffff77';x.lineWidth=1;x.beginPath();
+ for(let i=0;i<=17;i++){const X=GL+30+i*(GR-GL-60)/17+sk;x.moveTo(X,GT+14);x.lineTo(X,GB-6)}for(let i=0;i<=7;i++){const Y=GT+14+i*(GB-GT-20)/7;x.moveTo(GL+30+sk,Y);x.lineTo(GR-30+sk,Y)}
+ x.moveTo(GL,GT);x.lineTo(GL+30,GT+14);x.moveTo(GR,GT);x.lineTo(GR-30,GT+14);x.moveTo(GL,GB);x.lineTo(GL+30,GB-6);x.moveTo(GR,GB);x.lineTo(GR-30,GB-6);x.stroke();
+ const kx=kp?kp.x:BX+Math.sin(tm*2)*8,ky=kp?kp.y:255;x.save();x.translate(kx,ky);x.rotate((kx-BX)/150*.9);
+ x.strokeStyle='#ffd43b';x.lineWidth=14;x.lineCap='round';x.beginPath();x.moveTo(-18,-20);x.lineTo(-40,-48);x.moveTo(18,-20);x.lineTo(40,-48);x.stroke();x.fillStyle='#fff';x.beginPath();x.arc(-41,-50,8,0,7);x.arc(41,-50,8,0,7);x.fill();
+ x.fillStyle='#ff922b';x.beginPath();x.roundRect(-22,-30,44,56,12);x.fill();x.fillStyle='#1c7ed6';x.fillRect(-18,24,15,30);x.fillRect(3,24,15,30);x.fillStyle='#f1c27d';x.beginPath();x.arc(0,-42,13,0,7);x.fill();x.fillStyle='#222';x.fillRect(-7,-45,4,4);x.fillRect(3,-45,4,4);x.restore();
+ if(st=='aim')ball(BX,BY,1);else if(sh){let X=sh.x,Y=sh.y,s=sh.s;if(st=='res'){if(sh.o=='save'){X+=(sh.tx>kp.ax?1:-1)*rt*220;Y+=rt*rt*300-rt*120}else if(sh.o=='miss'){Y-=rt*70;s*=.9}else if(sh.o=='post'){X+=(sh.tx<BX?-1:1)*rt*160;Y+=rt*rt*260}}ball(X,Y,Math.max(.2,s))}
+ x.strokeStyle='#fff';x.lineWidth=9;x.lineCap='round';x.beginPath();x.moveTo(GL,GB);x.lineTo(GL,GT);x.lineTo(GR,GT);x.lineTo(GR,GB);x.stroke();
+ if(drag&&st=='aim'){x.setLineDash([10,8]);x.strokeStyle='#ffd43b';x.lineWidth=5;x.beginPath();drag.pts.forEach((p,i)=>x[i?'lineTo':'moveTo'](p.x,p.y));x.stroke();x.setLineDash([])}
+ fx.forEach(f=>{x.fillStyle=f.c;x.fillRect(f.x,f.y,8,5)});
+ for(let i=0;i<TOTAL;i++){x.fillStyle=i<res.length?(res[i]?'#2ecc71':'#e03131'):'#bbb';x.beginPath();x.arc(30+i*34,572,12,0,7);x.fill();x.strokeStyle='#fff';x.lineWidth=2;x.stroke()}
+ x.font='bold 22px "Trebuchet MS"';x.textAlign='left';x.fillStyle='#fff';x.fillText('Gols: '+res.reduce((a,b)=>a+b,0),210,580);
+ if(st=='aim'){x.textAlign='center';x.globalAlpha=.6+.4*Math.sin(hint*4);x.font='bold 24px "Trebuchet MS"';x.fillText('Arraste da bola para cima! (força = tamanho, curva = arco do dedo)',480,450);x.globalAlpha=1}
+ if(msg&&st=='res'){const s=1+.25*Math.sin(Math.min(rt*6,3.14));x.save();x.translate(480,360);x.scale(s,s);x.font='bold 74px "Trebuchet MS"';x.textAlign='center';x.strokeStyle='#222';x.lineWidth=8;x.fillStyle=sh.o=='goal'?'#51cf66':'#ff6b6b';x.strokeText(msg,0,0);x.fillText(msg,0,0);x.restore()}
+ $('inf').textContent='Chute '+Math.min(res.length+(st=='aim'||st=='end'?(st=='end'?0:1):0),TOTAL)+' de '+TOTAL}
+async function save(n,g){if(!sb)return 'Ranking indisponível (Supabase não configurado).';const r=await sb.from('blib_rankings').insert({jogo_slug:'penalty',nome_jogador:n,pontuacao:g});return r.error?'Não foi possível salvar: '+r.error.message:''}
+async function getTop(){if(!sb)return[];const r=await sb.from('blib_rankings').select('nome_jogador,pontuacao').eq('jogo_slug','penalty').order('pontuacao',{ascending:false}).limit(5);return r.data||[]}
+function box(h){$('bx').innerHTML=h;$('ov').classList.add('on')}
+function finish(){const g=res.reduce((a,b)=>a+b,0);box('<h2>'+(g>=4?'🏆 Craque!':g>=2?'👏 Muito bem!':'⚽ Continue treinando!')+'</h2><p>Você fez <b>'+g+' gol(s)</b> de '+TOTAL+'</p><input id="nm" maxlength="15" placeholder="Seu apelido"><br><button class="b" id="sv">Salvar no ranking</button><p id="ms"></p>');
+ $('sv').onclick=async()=>{const n=$('nm').value.trim().slice(0,15);if(!n){$('ms').textContent='Digite um apelido!';return}$('sv').disabled=true;const e=await save(n,g),l=await getTop();
+  const o=document.createElement('ol');l.forEach(r=>{const li=document.createElement('li');li.textContent=r.nome_jogador+' — '+r.pontuacao+' gol(s)';o.appendChild(li)});
+  $('bx').innerHTML='<h2>🏆 Top 5 artilheiros</h2>';if(e){const p=document.createElement('p');p.textContent=e;$('bx').appendChild(p)}$('bx').appendChild(o);
+  $('bx').insertAdjacentHTML('beforeend','<button class="b" onclick="again()">Jogar novamente</button> <a class="b" href="./index.html">Voltar ao BLIB</a>')}}
+function again(){$('ov').classList.remove('on');res=[];st='aim';sh=null;kp=null;fx=[];msg=''}
+const pt=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*960/r.width,y:(e.clientY-r.top)*600/r.height}};
+cv.addEventListener('pointerdown',e=>{if(st!='aim')return;cv.setPointerCapture(e.pointerId);drag={pts:[pt(e)]}});
+cv.addEventListener('pointermove',e=>{if(drag)drag.pts.push(pt(e))});
+cv.addEventListener('pointerup',e=>{if(!drag)return;const p=drag.pts,s=p[0],q=pt(e),m=p[p.length>>1],dx=q.x-s.x,dy=q.y-s.y,ch=Math.hypot(dx,dy)||1;drag=null;
+ if(dy>-40){msg='';hint=0;return}fire(dx,dy,((dx*(m.y-s.y)-dy*(m.x-s.x))/ch)*1.1)});
+let last=0;function loop(ts){update(Math.min((ts-last)/1000,.1));last=ts;draw();requestAnimationFrame(loop)}requestAnimationFrame(ts=>{last=ts;loop(ts)});
+</script></body></html>
